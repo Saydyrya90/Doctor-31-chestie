@@ -1,0 +1,8 @@
+sphinx
+sphinx-rtd-theme
+pylint          # includes pyreverse
+coverage
+pytest
+streamlit
+pandas
+numpy
