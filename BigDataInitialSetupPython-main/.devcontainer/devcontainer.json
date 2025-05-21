@@ -1,0 +1,32 @@
+{
+  "name": "PhdResearch",
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "dev",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "/bin/bash",
+            "args": ["--login"]
+          }
+        },
+        "python.envFile": "${workspaceFolder}/.env"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylint",
+        "ms-python.vscode-pylance",
+        "streetsidesoftware.code-spell-checker",
+        "mechatroner.rainbow-csv",
+        "lextudio.restructuredtext",
+        "njpwerner.autodocstring",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

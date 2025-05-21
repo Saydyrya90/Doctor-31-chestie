@@ -1,0 +1,22 @@
+# Ignore Python bytecode files and caches
+__pycache__/
+*.pyc
+
+# Ignore coverage reports
+.coverage
+htmlcov/
+
+# ignore documentation
+docs
+
+# ignore diagrams
+uml
+
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore environment files
+.env
+
+# Ignore any virtual environments
+venv/
