@@ -1,0 +1,4 @@
+[
+  "tests/test_anomaly_detection.py::test_ai_anomaly_added",
+  "tests/test_validators.py::test_bmi_invalid_cases"
+]

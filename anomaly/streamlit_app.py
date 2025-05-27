@@ -8,16 +8,23 @@ import matplotlib.pyplot as plt
 import time
 import shap
 
-# --- Project-Specific Imports (Corrected) ---
+# --- Attempt to import AgGrid ---
 try:
-    # Correctly import specific names from rule_based_detector
+    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+    AGGRID_AVAILABLE = True
+except ImportError:
+    AGGRID_AVAILABLE = False
+    # Optional: st.warning("streamlit-aggrid is not installed. Tables might be less performant and lack advanced features.")
+
+
+# --- Project-Specific Imports (Revised for src layout) ---
+try:
     from src.rule_based_detector import (
         get_anomaly_detection_pipeline,
         initialize_anomaly_columns,
         finalize_anomaly_data,
         RULE_DEFINITIONS,
-        SEVERITY_LEVEL_MAP # Ensure this is defined in rule_based_detector.py if it's used here directly
-                           # (or access it as rule_based_detector.SEVERITY_LEVEL_MAP if not imported directly)
+        SEVERITY_LEVEL_MAP
     )
 except ImportError as e:
     st.error(f"Error importing from src.rule_based_detector: {e}. Ensure 'src/rule_based_detector.py' exists and src/ contains an __init__.py file.")
@@ -38,8 +45,16 @@ except ImportError as e:
 
 
 # --- Global Configuration ---
+# ... (rest of your streamlit_app.py code from the previous full version) ...
+# THE REST OF THIS FILE SHOULD BE THE SAME AS THE ONE I PROVIDED THAT INCLUDED
+# THE AGGRID IMPLEMENTATION FOR BOTH RULE-BASED AND AI MODES.
+# I'm not repeating the entire streamlit_app.py here to save space,
+# as only the AgGrid import section and the rule_based_detector.py content needed fixing.
+
+
+# --- Global Configuration ---
 st.set_page_config(layout="wide")
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__)) # streamlit_app.py is at project root
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE_ORIGINAL_CSV = os.path.join(PROJECT_ROOT, 'data', 'doctor31_cazuri(1).csv')
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -70,32 +85,21 @@ def get_or_train_ai_model_cached(df_common_cols_for_training):
                 missing_or_empty = [col for col in required_cols_for_labels if col not in df_common_cols_for_training.columns or not df_common_cols_for_training[col].notna().any()]
                 st.error(f"Missing or empty crucial columns for label generation: {missing_or_empty}. Cannot train AI model.")
                 return None, None
-            
             df_for_labeling = df_common_cols_for_training.dropna(subset=required_cols_for_labels).copy()
             if df_for_labeling.empty:
-                st.error("No data left for labeling after dropping NaNs in essential features.")
-                return None, None
-
+                st.error("No data left for labeling after dropping NaNs in essential features."); return None, None
             df_labeled = generate_labels_supervised(df_for_labeling)
-        
         if df_labeled.empty or len(df_labeled["label"].dropna()) < 20 :
-            st.warning(f"Not enough labeled data generated ({len(df_labeled['label'].dropna())} usable labels) to train a reliable supervised model. Need at least 20.")
-            return None, None
+            st.warning(f"Not enough labeled data ({len(df_labeled['label'].dropna())} usable) to train. Need at least 20."); return None, None
         if df_labeled["label"].nunique() < 2:
-            st.warning(f"Only one class present in generated labels. Cannot train supervised model. Label distribution:\n{df_labeled['label'].value_counts()}")
-            return None, None
-
-        with st.spinner("Training supervised AI anomaly model (XGBoost)... This may take a moment."):
+            st.warning(f"Only one class in labels. Label distribution:\n{df_labeled['label'].value_counts()}"); return None, None
+        with st.spinner("Training supervised AI (XGBoost)..."):
             try:
                 model, scaler = train_supervised_anomaly_model(df_labeled)
-                joblib.dump(model, SUPERVISED_MODEL_PATH)
-                joblib.dump(scaler, SUPERVISED_SCALER_PATH)
-                st.success("New supervised model trained and saved.")
-                return model, scaler
+                joblib.dump(model, SUPERVISED_MODEL_PATH); joblib.dump(scaler, SUPERVISED_SCALER_PATH)
+                st.success("New supervised model trained and saved."); return model, scaler
             except Exception as e_train:
-                st.error(f"Error during model training: {e_train}")
-                st.exception(e_train)
-                return None, None
+                st.error(f"Error during model training: {e_train}"); st.exception(e_train); return None, None
 
 def highlight_severity_rule_based(row):
     severity_category = row.get('max_anomaly_severity_category', '')
@@ -114,7 +118,6 @@ def get_ai_risk_color_text(score):
 
 # --- Main App ---
 st.title("Doctor31 Data Anomaly Detection Platform")
-
 df_original_cols, df_common_cols = load_initial_data(DATA_FILE_ORIGINAL_CSV)
 
 if df_original_cols is not None and df_common_cols is not None:
@@ -124,7 +127,6 @@ if df_original_cols is not None and df_common_cols is not None:
         ("Rule-Based (Severity Scoring)", "AI Supervised (XGBoost)")
     )
     st.sidebar.markdown("---")
-
     st.subheader("Original Data Sample (First 5 Rows)")
     st.dataframe(df_original_cols.head())
     st.markdown("---")
@@ -132,62 +134,53 @@ if df_original_cols is not None and df_common_cols is not None:
     if detection_mode == "Rule-Based (Severity Scoring)":
         st.header("Rule-Based Anomaly Detection Results")
         df_processed_rb = df_original_cols.copy()
-        # Now these calls should work directly because the names are imported
-        df_processed_rb = initialize_anomaly_columns(df_processed_rb)
-
+        df_processed_rb = initialize_anomaly_columns(df_processed_rb) # From rule_based_detector
         st.subheader("Detection Progress")
         progress_bar_rb = st.progress(0)
         status_text_rb = st.empty()
-        rules_pipeline_rb = get_anomaly_detection_pipeline()
+        rules_pipeline_rb = get_anomaly_detection_pipeline() # From rule_based_detector
         total_steps_rb = len(rules_pipeline_rb)
-
         for i, (message, rule_func) in enumerate(rules_pipeline_rb):
             status_text_rb.text(f"{message}...")
-            try:
-                df_processed_rb = rule_func(df_processed_rb)
-            except Exception as e:
-                status_text_rb.error(f"Error during '{message}': {e}")
-                st.exception(e); st.stop()
+            try: df_processed_rb = rule_func(df_processed_rb)
+            except Exception as e: status_text_rb.error(f"Error in '{message}': {e}"); st.exception(e); st.stop()
             progress_bar_rb.progress((i + 1) / total_steps_rb)
-        
-        df_final_rb = finalize_anomaly_data(df_processed_rb)
+        df_final_rb = finalize_anomaly_data(df_processed_rb) # From rule_based_detector
         status_text_rb.success("Rule-based anomaly detection complete!")
-
         anomalous_df_rb = df_final_rb[df_final_rb['is_anomaly']].copy()
         if 'anomaly_reason' in anomalous_df_rb.columns:
-            anomalous_df_rb['anomaly_reason_str'] = anomalous_df_rb['anomaly_reason'].apply(
-                lambda x: '; '.join(x) if isinstance(x, list) and x else "N/A")
-        else:
-            anomalous_df_rb['anomaly_reason_str'] = "Reason processing error"
-
+            anomalous_df_rb['anomaly_reason_str'] = anomalous_df_rb['anomaly_reason'].apply(lambda x: '; '.join(x) if isinstance(x, list) and x else "N/A")
+        else: anomalous_df_rb['anomaly_reason_str'] = "Reason error"
         if not anomalous_df_rb.empty and 'max_anomaly_severity_value' in anomalous_df_rb.columns and 'anomaly_score_percentage' in anomalous_df_rb.columns:
-            anomalous_df_rb = anomalous_df_rb.sort_values(
-                by=['max_anomaly_severity_value', 'anomaly_score_percentage'], ascending=[False, False])
-
+            anomalous_df_rb = anomalous_df_rb.sort_values(by=['max_anomaly_severity_value', 'anomaly_score_percentage'], ascending=[False, False])
+        
         if not anomalous_df_rb.empty and 'applied_rule_codes' in anomalous_df_rb.columns:
-            all_codes = [code for sublist in anomalous_df_rb['applied_rule_codes'] for code in sublist if isinstance(sublist, list)]
+            all_codes = [code for sl in anomalous_df_rb['applied_rule_codes'] for code in sl if isinstance(sl, list)]
             if all_codes:
                 counts = pd.Series(all_codes).value_counts().rename(index=lambda rc: f"{rc}: {RULE_DEFINITIONS.get(rc, ('Unknown Rule', '', 0))[0]}")
-                st.subheader("Top Anomaly Reasons Counts (Rule-Based):")
-                st.dataframe(counts)
-            
+                st.subheader("Top Anomaly Reasons Counts (Rule-Based):"); st.dataframe(counts)
+        
         st.subheader(f"Anomalous Rows Found (Rule-Based): {len(anomalous_df_rb)}")
         if not anomalous_df_rb.empty:
+            # --- UPDATED LEGEND TEXT ---
             st.markdown("""
-            **Legend:** <span style='background-color:#FFCCCB;color:black;padding:2px 5px;border-radius:3px;'>Red</span> (High Severity/Error),
-            <span style='background-color:#FFD580;color:black;padding:2px 5px;border-radius:3px;'>Orange</span> (Suspicious/Inconsistent),
-            <span style='background-color:#FFFFE0;color:black;padding:2px 5px;border-radius:3px;'>Yellow</span> (Minor Warning)
+            **Legend for Anomaly Severity (Rule-Based):**
+            - <span style='background-color:#FFCCCB;color:black;padding:2px 5px;border-radius:3px;'>Red</span>: Critical data errors or biologically implausible values.
+              > *Examples: BMI outside [12-60], Age > 120 or <= 0, Height < 50cm or > 220cm, Weight < 20kg or > 300kg.*
+            - <span style='background-color:#FFD580;color:black;padding:2px 5px;border-radius:3px;'>Orange</span>: Suspicious data, inconsistencies, or potential data management issues.
+              > *Examples: Elderly (Age > 85) & Obese, Potential duplicate, BMI calculation mismatch, Missing critical age/weight/height.*
+            - <span style='background-color:#FFFFE0;color:black;padding:2px 5px;border-radius:3px;'>Yellow</span>: Warnings for values at the edge of typical ranges.
+              > *Examples: Age 0-18 or 100-120, Height 50-150cm.*
             """, unsafe_allow_html=True)
             st.markdown("---")
 
             display_cols_rb = ['id_cases', 'age_v', 'greutate', 'inaltime', 'IMC', 'imcINdex',
                                'max_anomaly_severity_category', 'anomaly_score_percentage',
                                'data1', 'anomaly_reason_str']
+            # The 'calculated_bmi' for rule-based is now 'rule_based_calculated_bmi'
             if 'rule_based_calculated_bmi' in anomalous_df_rb.columns:
-                if 'data1' in display_cols_rb:
-                    display_cols_rb.insert(display_cols_rb.index('data1'), 'rule_based_calculated_bmi')
-                else:
-                    display_cols_rb.append('rule_based_calculated_bmi')
+                if 'data1' in display_cols_rb: display_cols_rb.insert(display_cols_rb.index('data1'), 'rule_based_calculated_bmi')
+                else: display_cols_rb.append('rule_based_calculated_bmi')
             
             actual_cols_rb = [col for col in display_cols_rb if col in anomalous_df_rb.columns]
             rows_to_show_rb = 1000
@@ -195,24 +188,42 @@ if df_original_cols is not None and df_common_cols is not None:
             display_subset_rb = anomalous_df_rb if show_all_rb else anomalous_df_rb.head(rows_to_show_rb)
             if not show_all_rb and len(anomalous_df_rb) > rows_to_show_rb:
                 st.caption(f"Displaying first {rows_to_show_rb} of {len(anomalous_df_rb)} anomalous rows.")
-            if actual_cols_rb:
+            
+            if AGGRID_AVAILABLE: # Use AgGrid for Rule-Based Anomalous Table
+                gb_rb = GridOptionsBuilder.from_dataframe(display_subset_rb[actual_cols_rb])
+                gb_rb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=25)
+                gb_rb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True, wrapText=True, autoHeight=True)
+                cell_style_jscode_rb = JsCode("""
+                function(params) {
+                    if (params.data.max_anomaly_severity_category === 'Red') { return {'backgroundColor': '#FFCCCB', 'color': 'black'}; }
+                    else if (params.data.max_anomaly_severity_category === 'Orange') { return {'backgroundColor': '#FFD580', 'color': 'black'}; }
+                    else if (params.data.max_anomaly_severity_category === 'Yellow') { return {'backgroundColor': '#FFFFE0', 'color': 'black'}; }
+                    return {'color': 'black'}; }; """)
+                for col_name in actual_cols_rb: gb_rb.configure_column(col_name, cellStyle=cell_style_jscode_rb)
+                gridOptions_rb = gb_rb.build()
+                AgGrid(display_subset_rb[actual_cols_rb], gridOptions=gridOptions_rb, height=600, fit_columns_on_grid_load=False, allow_unsafe_jscode=True, theme='streamlit', key='aggrid_rb')
+            elif actual_cols_rb: # Fallback
+                st.warning("streamlit-aggrid not installed. Using st.dataframe (might be slow).")
                 st.dataframe(display_subset_rb[actual_cols_rb].style.apply(highlight_severity_rule_based, axis=1))
             
             @st.cache_data
             def convert_df_to_csv_r(input_df, cols): return input_df[cols].to_csv(index=False).encode('utf-8')
-            csv_anomalous_rb_dl = convert_df_to_csv_r(anomalous_df_rb, actual_cols_rb)
-            st.download_button("Download ALL Anomalous Data (Rule-Based)", csv_anomalous_rb_dl, "anomalies_rule_based.csv", "text/csv", key="download_anom_rb")
+            csv_anom_rb_dl = convert_df_to_csv_r(anomalous_df_rb, actual_cols_rb)
+            st.download_button("Download ALL Anomalous Data (Rule-Based)", csv_anom_rb_dl, "anomalies_rule_based.csv", "text/csv", key="dl_anom_rb")
 
         valid_df_rb = df_final_rb[~df_final_rb['is_anomaly']].copy()
-        cols_to_drop_rb = list(set(valid_df_rb.columns) - set(df_original_cols.columns))
-        valid_df_rb.drop(columns=cols_to_drop_rb, inplace=True, errors='ignore')
+        cols_to_drop_rb_valid = list(set(valid_df_rb.columns) - set(df_original_cols.columns))
+        valid_df_rb.drop(columns=cols_to_drop_rb_valid, inplace=True, errors='ignore')
         st.subheader(f"Valid Rows (Rule-Based) - First 5: {len(valid_df_rb)}")
         st.dataframe(valid_df_rb.head())
         if not valid_df_rb.empty:
             csv_valid_rb_dl = valid_df_rb.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Valid Data (Rule-Based)", csv_valid_rb_dl, "valid_rule_based.csv", "text/csv", key="download_valid_rb")
+            st.download_button("Download Valid Data (Rule-Based)", csv_valid_rb_dl, "valid_rule_based.csv", "text/csv", key="dl_valid_rb")
 
     elif detection_mode == "AI Supervised (XGBoost)":
+        # ... (AI Supervised Mode code - remains the same as previous full version) ...
+        # This section is long, so I'll just put a placeholder.
+        # Ensure it's the same as the one that was working before for the AI mode.
         st.header("AI Supervised Anomaly Detection (XGBoost)")
         df_ai_input = df_common_cols.copy()
         df_validated_for_ai = validate_data_for_ai(df_ai_input)
@@ -252,28 +263,26 @@ if df_original_cols is not None and df_common_cols is not None:
             st.subheader("📊 Tabel cu Date și Scoruri AI Supervizate")
             cols_to_show_ai = ['id_case', 'age', 'sex', 'weight', 'height', 'bmi_category', 'bmi', 'timestamp', 'ai_anomaly_score', 'anomaly_risk_category_text', 'valid', 'suspect_elderly_obese']
             actual_cols_ai = [col for col in cols_to_show_ai if col in df_show_ai.columns]
-            try:
-                from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+            
+            if AGGRID_AVAILABLE:
                 gb = GridOptionsBuilder.from_dataframe(df_show_ai[actual_cols_ai])
                 gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=25)
                 gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True, wrapText=True, autoHeight=True)
-                cell_style_jscode = JsCode("""
+                cell_style_jscode_ai = JsCode("""
                 function(params) {
-                    if (params.column.colId === 'anomaly_risk_category_text') {
-                        if (params.value === 'Red') { return {'backgroundColor': '#FFCCCB', 'color': 'black'}; }
-                        else if (params.value === 'Orange') { return {'backgroundColor': '#FFD580', 'color': 'black'}; }
-                        else if (params.value === 'Yellow') { return {'backgroundColor': '#FFFFE0', 'color': 'black'}; }
-                        else if (params.value === 'Green') { return {'backgroundColor': 'lightgreen', 'color': 'black'}; }
-                    } return {'color': 'black'}; }; """)
-                gb.configure_columns(actual_cols_ai, cellStyle=cell_style_jscode)
+                    if (params.data.anomaly_risk_category_text === 'Red') { return {'backgroundColor': '#FFCCCB', 'color': 'black'}; }
+                    else if (params.data.anomaly_risk_category_text === 'Orange') { return {'backgroundColor': '#FFD580', 'color': 'black'}; }
+                    else if (params.data.anomaly_risk_category_text === 'Yellow') { return {'backgroundColor': '#FFFFE0', 'color': 'black'}; }
+                    else if (params.data.anomaly_risk_category_text === 'Green') { return {'backgroundColor': 'lightgreen', 'color': 'black'}; }
+                    return {'color': 'black'}; }; """)
+                for col_name_ag in actual_cols_ai: gb.configure_column(col_name_ag, cellStyle=cell_style_jscode_ai)
                 gridOptions = gb.build()
-                AgGrid(df_show_ai[actual_cols_ai], gridOptions=gridOptions, height=600, fit_columns_on_grid_load=False, allow_unsafe_jscode=True, theme='streamlit')
-            except ImportError:
-                st.warning("streamlit-aggrid not installed. `pip install streamlit-aggrid`")
+                AgGrid(df_show_ai[actual_cols_ai], gridOptions=gridOptions, height=600, fit_columns_on_grid_load=False, allow_unsafe_jscode=True, theme='streamlit', key='aggrid_ai')
+            else:
+                st.warning("streamlit-aggrid not installed for optimal table display.")
                 if actual_cols_ai: st.dataframe(df_show_ai[actual_cols_ai])
 
-            st.markdown("---")
-            st.subheader("🧠 Explică un Caz cu SHAP (Model Supervizat)")
+            st.markdown("---"); st.subheader("🧠 Explică un Caz cu SHAP (Model Supervizat)")
             if not df_show_ai.empty:
                 max_idx_shap = len(df_show_ai)-1
                 if max_idx_shap >=0:
@@ -297,11 +306,9 @@ if df_original_cols is not None and df_common_cols is not None:
                     else: st.info("Index SHAP invalid.")
                 else: st.info("Tabel filtrat gol pentru SHAP.")
             else: st.error("Model AI sau date procesate lipsesc pentru SHAP.")
-        else:
-            st.error("Modelul AI nu a putut fi antrenat/încărcat.")
+        else: st.error("Modelul AI nu a putut fi antrenat/încărcat.")
         
-        st.markdown("---")
-        st.subheader("📊 Diagrame Suplimentare (Mod AI)")
+        st.markdown("---"); st.subheader("📊 Diagrame Suplimentare (Mod AI)")
         if model_ai and scaler_ai and 'ai_anomaly_score' in df_ai_processed.columns:
             col1, col2 = st.columns(2)
             with col1:
