@@ -1,6 +1,6 @@
 import pandas as pd
 from unittest.mock import MagicMock
-from anomaly.src.anomaly_detection_supervised import (
+from src.anomaly_detection_supervised import (
     generate_labels,
     train_supervised_anomaly_model,
     apply_supervised_model
