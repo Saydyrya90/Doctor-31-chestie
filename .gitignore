@@ -1,2 +1,6 @@
 
 second inferior version/
+
+*.pyc
+
+*.pkl

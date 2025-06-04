@@ -4,7 +4,6 @@ import numpy as np # Make sure numpy is imported
 import os
 
 # Define the mapping from your CSV column names (doctor31_cazuri(1).csv)
-# to the common names expected by the new AI system's validators.py and anomaly_detection_supervised.py
 COLUMN_MAPPING_TO_COMMON = {
     'id_cases': 'id_case', # New system might use 'id_case'
     'age_v': 'age',
@@ -16,11 +15,10 @@ COLUMN_MAPPING_TO_COMMON = {
     'data1': 'timestamp',
     'finalizat': 'finalizat',   # Keeping as is
     'testing': 'testing',       # Keeping as is
-    'imcINdex': 'bmi'           # This is the numerical BMI value from your CSV
-    # Add any other columns from your CSV if they need mapping or should be carried through
+    'imcINdex': 'bmi'           #  BMI value from CSV
 }
 
-# Mapping from common names back to your original names (useful if rule_based_detector needs original names)
+# Mapping from common names back to original names (useful if rule_based_detector needs original names)
 # This is generated automatically from the above
 COLUMN_MAPPING_TO_ORIGINAL = {v: k for k, v in COLUMN_MAPPING_TO_COMMON.items() if k is not None and v is not None}
 
@@ -65,9 +63,7 @@ def load_and_prepare_data(csv_path: str) -> tuple[pd.DataFrame | None, pd.DataFr
         if col in df_common_columns.columns:
             df_common_columns[col] = pd.to_numeric(df_common_columns[col], errors='coerce')
         else:
-            # If a mapped column (like 'bmi' from 'imcINdex') isn't present after renaming,
-            # it means the source column was missing or not in COLUMN_MAPPING_TO_COMMON.
-            # For AI model, these features are crucial.
+            # source column was missing or not in COLUMN_MAPPING_TO_COMMON.
             print(f"Warning: Crucial common column '{col}' not found after mapping. AI model might fail.")
             df_common_columns[col] = np.nan # Add as NaN if missing
 
@@ -79,31 +75,11 @@ def load_and_prepare_data(csv_path: str) -> tuple[pd.DataFrame | None, pd.DataFr
     return df_original_columns, df_common_columns
 
 
-# The PDF loading function from the new code can be kept if you plan to support PDF uploads later
-# For now, we will comment it out to focus on the CSV.
-# import pdfplumber
-# def load_data_from_pdf_new_structure(pdf_path: str) -> pd.DataFrame:
-# rows = []
-# with pdfplumber.open(pdf_path) as pdf:
-# for page in pdf.pages:
-# table = page.extract_table()
-# if table:
-# for row in table:
-# rows.append(row)
-# headers = [
-# "id_case", "age", "sex", "agreement", "weight",
-# "height", "bmi_category", "timestamp", "symptom_1", "symptom_2", "bmi"
-# ]
-# df = pd.DataFrame(rows, columns=headers)
-# if not df.empty and df.iloc[0].equals(pd.Series(headers)):
-# df = df.iloc[1:]
-# return df
-
 if __name__ == "__main__":
     # Example usage:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root_dir = os.path.dirname(script_dir)
-    # Assuming your data folder is at the project root, sibling to src/
+    # Assuming data folder is at the project root, sibling to src/
     csv_file_path_main = os.path.join(project_root_dir, "data", "doctor31_cazuri(1).csv")
 
     print(f"Attempting to load data from: {csv_file_path_main}")
